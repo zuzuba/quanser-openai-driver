@@ -25,6 +25,9 @@ Dp = 0.0005  # Equivalent viscous damping coefficient (N-m-s/rad)
 
 g = 9.81  # Gravity constant
 
+# Encoders
+enc_discretization = 2048  # Encoder resolution
+
 
 def forward_model(theta, alpha, theta_dot, alpha_dot, Vm, dt, euler_steps):
 
@@ -78,12 +81,14 @@ except:
 class QubeServo2Simulator(object):
     '''Simulator that has the same interface as the hardware wrapper.'''
     def __init__(self,
-                 safe_operating_voltage=18.0,
+                 safe_operating_voltage=8.0,
                  euler_steps=1,
                  frequency=1000):
         self._time_step = 1.0 / frequency
         self._euler_steps = euler_steps
         self.state = [0, 0, 0, 0]
+        self.encoders = [0, 0]
+        self.unnormalized_angles = [self.state[0], self.state[1]]
 
     def __enter__(self):
         return self
@@ -100,9 +105,13 @@ class QubeServo2Simulator(object):
             action,
             self._time_step,
             self._euler_steps)
-        encoders = self.state[:2]  # [theta, alpha]
+        self.unnormalized_angles[0] += self.state[2] * self._time_step
+        self.unnormalized_angles[1] += self.state[3] * self._time_step
+        self.encoders[0] = int(self.unnormalized_angles[0] * (-enc_discretization / (2.0 * np.pi)))
+        self.encoders[1] = int(self.unnormalized_angles[1] * (enc_discretization / (2.0 * np.pi)))
+
         currents = [action / 8.4]  # 8.4 is resistance
         others = [0.] #[tach0, other_stuff]
 
-        return currents, encoders, others
+        return currents, self.encoders, others
 
